@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>おえかきプラネット — 描いた絵が動きだす</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="header">
+    <h1>🪐 おえかきプラネット</h1>
+    <nav id="tabs">
+      <button class="tab active" data-view="world">🌍 せかい</button>
+      <button class="tab" data-view="print">🖨️ かみを いんさつ</button>
+      <button class="tab" data-view="scan">📷 スキャン</button>
+      <button class="tab" data-view="draw">🖍️ がめんで おえかき</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ============ ワールド ============ -->
+    <section id="view-world" class="view active">
+      <canvas id="world-canvas"></canvas>
+      <div id="world-buttons">
+        <button id="btn-sample" class="chip-btn">✨ サンプルを ついか</button>
+        <button id="btn-clear-world" class="chip-btn danger">🗑️ ぜんぶ けす</button>
+      </div>
+      <div id="world-hint">いきものを タップすると よろこぶよ!</div>
+    </section>
+
+    <!-- ============ 印刷 ============ -->
+    <section id="view-print" class="view">
+      <div class="panel">
+        <h2>ぬりえシートを いんさつしよう</h2>
+        <p class="note">A4の かみに いんさつしてね。すみの くろい ■ マークは ぬりつぶさないでね!</p>
+        <div id="print-cards" class="card-row"></div>
+      </div>
+    </section>
+
+    <!-- ============ スキャン ============ -->
+    <section id="view-scan" class="view">
+      <div class="panel">
+        <h2>かいた 絵を よみこもう</h2>
+
+        <div class="scan-step" id="scan-step-select">
+          <p class="step-label">① どの ぬりえシート かな?</p>
+          <div id="scan-template-chips" class="chip-row"></div>
+        </div>
+
+        <div class="scan-step" id="scan-step-photo">
+          <p class="step-label">② シートの しゃしんを とろう (ま上から、ぜんたいが うつるように)</p>
+          <label class="big-btn" for="scan-file">📷 しゃしんを とる / えらぶ</label>
+          <input type="file" id="scan-file" accept="image/*" capture="environment" hidden>
+        </div>
+
+        <div class="scan-step hidden" id="scan-step-adjust">
+          <p class="step-label">③ 4つの ● が すみの ■ マークに あっているか たしかめてね (ゆびで うごかせるよ)</p>
+          <div id="adjust-wrap"><canvas id="adjust-canvas"></canvas></div>
+          <p class="note" id="adjust-msg"></p>
+          <div class="btn-row">
+            <button id="btn-do-scan" class="big-btn">✨ よみとる!</button>
+            <button id="btn-retake" class="chip-btn">とりなおす</button>
+          </div>
+        </div>
+
+        <div class="scan-step hidden" id="scan-step-preview">
+          <p class="step-label">④ できあがり!</p>
+          <div id="preview-wrap"><canvas id="preview-canvas"></canvas></div>
+          <div class="btn-row">
+            <button id="btn-release" class="big-btn">🌊 せかいへ はなつ!</button>
+            <button id="btn-rescan" class="chip-btn">やりなおす</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 画面でおえかき ============ -->
+    <section id="view-draw" class="view">
+      <div class="panel">
+        <h2>がめんで おえかき (プリンタが なくても OK)</h2>
+        <div id="draw-template-chips" class="chip-row"></div>
+        <div id="draw-tools">
+          <div id="palette"></div>
+          <div id="brush-sizes"></div>
+          <button id="btn-eraser" class="tool-btn" title="けしゴム">🧽</button>
+          <button id="btn-clear-draw" class="tool-btn" title="ぜんぶけす">🗑️</button>
+        </div>
+        <div id="draw-wrap"><canvas id="draw-canvas"></canvas></div>
+        <div class="btn-row">
+          <button id="btn-draw-release" class="big-btn">🌊 せかいへ はなつ!</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 印刷専用領域 -->
+<div id="print-area"><img id="print-img" alt=""></div>
+
+<script src="js/templates.js"></script>
+<script src="js/scan.js"></script>
+<script src="js/world.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
