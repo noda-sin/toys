@@ -81,6 +81,9 @@ const World = (() => {
     dpr = Math.min(2, window.devicePixelRatio || 1);
     W = canvas.clientWidth;
     H = canvas.clientHeight;
+    // 4K プロジェクター等でラズパイが溺れないよう総ピクセル数に上限を設ける
+    const BUDGET = 2400000;
+    while (W * dpr * H * dpr > BUDGET && dpr > 1) dpr -= 0.25;
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
   }
@@ -134,7 +137,7 @@ const World = (() => {
       y: opts.y !== undefined ? opts.y : zone.min + Math.random() * (zone.max - zone.min),
       baseY: 0,
       dir: Math.random() < 0.5 ? -1 : 1,
-      speed: 0.025 + Math.random() * 0.03,       // 画面幅 / 秒
+      speed: 0.05 + Math.random() * 0.05,        // 画面幅 / 秒 (横断 ~12-20秒)
       phase: Math.random() * Math.PI * 2,
       freq: 5 + Math.random() * 3,
       scale: 0,
@@ -704,7 +707,8 @@ const World = (() => {
   /* ---------------- メインループ ---------------- */
 
   function tick(ts) {
-    const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
+    // 0.1秒クランプ: 10fps を下回らない限りスローモーション化しない
+    const dt = Math.min(0.1, (ts - lastTs) / 1000 || 0.016);
     lastTs = ts;
     time += dt;
 
