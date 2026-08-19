@@ -122,7 +122,12 @@ const World = (() => {
       const c = creatures[i];
       const hw = (c.sprite.width * c.scale) / 2;
       const hh = (c.sprite.height * c.scale) / 2;
-      const cx = c.x * W, cy = c.y * H;
+      const cx = c.x * W;
+      let cy = c.y * H;
+      if (c.habitat === "land") {
+        // 陸は接地面が基準なので見た目の中心に合わせる
+        cy = H * ((LAYOUT.roadTop + LAYOUT.roadBottom) / 2) + 6 - hh;
+      }
       if (px > cx - hw && px < cx + hw && py > cy - hh && py < cy + hh) {
         c.excited = 1;
         c.spin = 0.001;
@@ -351,18 +356,17 @@ const World = (() => {
   /* ---- 生きもの描画 ---- */
 
   function drawCreature(c) {
-    const spr = c.sprite;
     const cx = c.x * W;
-    let cy = c.y * H;
-
-    if (c.habitat === "land") {
-      // 道路の上でバウンド
-      const bounce = Math.abs(Math.sin(time * 8 + c.phase)) * 3 * (1 + c.excited * 2);
-      cy = H * ((LAYOUT.roadTop + LAYOUT.roadBottom) / 2) - (spr.height * c.scale) / 2 + 6 - bounce;
-    }
 
     ctx.save();
-    ctx.translate(cx, cy);
+
+    if (c.habitat === "land") {
+      drawDrive(c, cx);
+      ctx.restore();
+      return;
+    }
+
+    ctx.translate(cx, c.y * H);
 
     // シルエットの向きと進行方向を合わせる
     const facingSign = c.facing === "left" ? -1 : 1;
@@ -373,45 +377,63 @@ const World = (() => {
     if (c.habitat === "sky") {
       // 進行方向へ少し傾ける
       ctx.rotate(Math.sin(time * 1.4 + c.phase) * 0.12);
+      drawFlap(c);
+    } else {
+      drawSwim(c);
     }
-
-    if (c.habitat === "sea") drawWiggle(c);
-    else if (c.habitat === "sky") drawFlap(c);
-    else drawPlain(c);
 
     ctx.restore();
   }
 
-  /* 縦ストリップを揺らす (魚の泳ぎ)。しっぽ側ほど大きく揺れる */
-  function drawWiggle(c) {
+  /* 背骨カーブに沿って体をしならせる (頭→しっぽへ進む波)。
+   * 各ストリップを波の局所勾配ぶん回転させるので、単なる上下ゆれでなく
+   * 「しなり」に見える。頭は安定、しっぽほど大きく振れる */
+  function drawSwim(c) {
     const spr = c.sprite;
-    const n = 12;
+    const n = 14;
     const sw = spr.width / n;
-    const amp = (6 + c.excited * 14);
-    // スプライト座標系で、しっぽは「向き」と反対側
-    const tailAtRight = c.facing === "left";
+    const tailAtRight = c.facing === "left";   // しっぽは「向き」と反対側
+    const t0 = time * c.freq + c.phase;
+    const baseAmp = spr.height * 0.055 * (1 + c.excited * 1.6);
+    const waveLen = 3.6;                       // 体に乗る波の位相量 (rad)
+    const offAt = s => baseAmp * (0.12 + s * s) * Math.sin(t0 - s * waveLen);
+
     for (let i = 0; i < n; i++) {
-      const tailFactor = tailAtRight ? (i + 1) / n : (n - i) / n;
-      const off = Math.sin(time * c.freq + c.phase + i * 0.55) * amp * (0.25 + tailFactor);
+      const u = (i + 0.5) * sw;                                    // ストリップ中心
+      const s = tailAtRight ? u / spr.width : 1 - u / spr.width;   // 頭からの距離 0..1
+      const off = offAt(s);
+      const ds = 0.05;
+      const slope = (offAt(s + ds) - offAt(s - ds)) / (2 * ds * spr.width)
+        * (tailAtRight ? 1 : -1);
+
+      // 継ぎ目が開かないよう前後に少し重ねて切り出す
+      const sx0 = Math.max(0, i * sw - sw * 0.25);
+      const sx1 = Math.min(spr.width, (i + 1) * sw + sw * 0.25);
+
+      ctx.save();
+      ctx.translate((u - spr.width / 2) * c.scale, off * c.scale);
+      ctx.rotate(Math.atan(slope) * 0.9);
       ctx.drawImage(
         spr,
-        i * sw, 0, sw, spr.height,
-        (i * sw - spr.width / 2) * c.scale,
-        (-spr.height / 2 + off) * c.scale,
-        sw * c.scale + 0.7,
-        spr.height * c.scale
+        sx0, 0, sx1 - sx0, spr.height,
+        (sx0 - u) * c.scale, (-spr.height / 2) * c.scale,
+        (sx1 - sx0) * c.scale, spr.height * c.scale
       );
+      ctx.restore();
     }
   }
 
-  /* 上半分 (翼) を縮ませて羽ばたく */
+  /* 上半分 (翼) を縮ませて羽ばたく。打ち下ろしは速く、持ち上げはゆっくり */
   function drawFlap(c) {
     const spr = c.sprite;
     const split = Math.round(spr.height * 0.48);
-    const flap = 0.55 + 0.45 * Math.abs(Math.sin(time * (c.freq * 1.2) + c.phase));
+    const raw = Math.sin(time * (c.freq * 1.2) + c.phase);
+    const shaped = Math.sign(raw) * Math.pow(Math.abs(raw), 0.65);  // 非対称イージング
+    const flap = 0.55 + 0.45 * Math.abs(shaped);
+    const bodyLift = -shaped * spr.height * 0.03;   // 打ち下ろしで体がふわっと浮く
     const w = spr.width * c.scale;
     const x0 = -w / 2;
-    const y0 = -spr.height / 2 * c.scale;
+    const y0 = (-spr.height / 2 + bodyLift) * c.scale;
 
     // 下半分 (体)
     ctx.drawImage(
@@ -430,12 +452,28 @@ const World = (() => {
     );
   }
 
-  function drawPlain(c) {
+  /* 道路の上をホップしながら走る。接地でつぶれ、空中で伸びる
+   * (スクワッシュ&ストレッチ)。基準点は接地面 (下端中央) */
+  function drawDrive(c, cx) {
     const spr = c.sprite;
+    const roadY = H * ((LAYOUT.roadTop + LAYOUT.roadBottom) / 2) + 6;
+    const p = Math.sin(time * (6 + c.excited * 4) + c.phase);
+    const hop = Math.max(0, p) * spr.height * c.scale * (0.06 + c.excited * 0.25);
+
+    let sx = 1, sy = 1;
+    if (p < 0) { sy = 1 - 0.10 * -p; sx = 1 + 0.10 * -p; }   // 接地: つぶれる
+    else       { sy = 1 + 0.05 * p;  sx = 1 - 0.05 * p; }    // 空中: 伸びる
+
+    ctx.translate(cx, roadY - hop);
+    const facingSign = c.facing === "left" ? -1 : 1;
+    if (c.dir !== facingSign) ctx.scale(-1, 1);
+    if (c.spin > 0) ctx.rotate(c.spin);
+    ctx.rotate(p * 0.03);
+    ctx.scale(sx, sy);
     ctx.drawImage(
       spr,
       (-spr.width / 2) * c.scale,
-      (-spr.height / 2) * c.scale,
+      -spr.height * c.scale,
       spr.width * c.scale,
       spr.height * c.scale
     );
