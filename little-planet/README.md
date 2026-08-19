@@ -59,8 +59,14 @@ cd little-planet && python3 -m http.server 8000
 ```
 
 - マーカー検出に失敗しても、4 点を手動ドラッグで合わせるフォールバック UI がある
-- スキャン結果は `localStorage` に保存され、次回起動時にワールドへ復元される
+- 保存先は自動切り替え: 保存サーバ ([`server/`](../server/README.md)) があればサーバへ
+  永続化 (再起動しても消えない・他の端末のスキャンも数秒で反映)、無ければ `localStorage`
 - じゆうモードは輪郭が閉じていなくても失敗にはならず、線の部分だけが切り抜かれて動く
+- じゆう描画は「🕺 にんげんにする」で骨格リグ付きで放流できる。関節は
+  AnimatedDrawings のポーズ推定 (要 [`server/`](../server/README.md) の POSE_URL 設定) が
+  自動配置し、確認画面でドラッグ補正できる。推定サービスが無ければ手動配置になる
+- `?kiosk=1` でタブ・ボタンを隠した全画面ワールドになる (プロジェクター常設用)。
+  ラズパイでのブース構成は [server/README.md](../server/README.md) を参照
 
 ### にんげんの骨格アニメ (Meta [AnimatedDrawings](https://github.com/facebookresearch/AnimatedDrawings) 方式のブラウザ内実装)
 

@@ -1,0 +1,28 @@
+# おえかきプラネット サーバの systemd ユニット (ラズパイ常設用)
+#
+# 設置:
+#   sudo cp server/oekaki-planet.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now oekaki-planet
+#
+# ポーズ推定サービスを使う場合は Environment=POSE_URL=... の
+# コメントを外して TorchServe の URL を指定する
+
+[Unit]
+Description=Oekaki Planet server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# リポジトリの場所に合わせて変更する
+WorkingDirectory=/home/pi/toys
+ExecStart=/usr/bin/node /home/pi/toys/server/server.js
+Environment=PORT=8000
+# Environment=POSE_URL=http://192.168.1.20:8080
+Restart=always
+RestartSec=3
+User=pi
+
+[Install]
+WantedBy=multi-user.target

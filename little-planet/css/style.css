@@ -216,6 +216,45 @@ main { flex: 1; min-height: 0; position: relative; }
   display: block;
 }
 
+/* ===== にんげんリグ確認モーダル ===== */
+#rig-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(74, 59, 47, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+
+.rig-box {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 8px 30px rgba(0,0,0,.3);
+}
+
+#rig-canvas {
+  display: block;
+  margin: 0 auto;
+  border-radius: 10px;
+  border: 2px solid #eee2d0;
+  touch-action: none;
+  max-width: 100%;
+}
+
+/* ===== キオスクモード (プロジェクター常設用) ===== */
+body.kiosk #header,
+body.kiosk #world-buttons { display: none; }
+
+body.kiosk #world-hint {
+  font-size: 16px;
+  padding: 10px 22px;
+}
+
 /* ===== 印刷 ===== */
 #print-area { display: none; }
 

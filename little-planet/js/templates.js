@@ -238,6 +238,27 @@ const HUMAN_RIG = {
 };
 HUMAN_RIG.joints.headTop = [260, 70];
 
+/* 自由描画に「にんげんリグ」を付けるときの標準骨格
+ * (スプライトのバウンディングボックスに対する比率 0..1) */
+const DEFAULT_JOINTS_N = {
+  headTop: [0.5, 0.06],
+  hips: [0.5, 0.60],
+  shoulderR: [0.64, 0.29], elbowR: [0.77, 0.41], wristR: [0.87, 0.52],
+  shoulderL: [0.36, 0.29], elbowL: [0.23, 0.41], wristL: [0.13, 0.52],
+  hipR: [0.57, 0.62], kneeR: [0.62, 0.77], ankleR: [0.64, 0.91],
+  hipL: [0.43, 0.62], kneeL: [0.38, 0.77], ankleL: [0.36, 0.91],
+};
+
+/* 正規化関節 (0..1) をスプライト座標へ展開し、にんげんと同じパーツ構成の
+ * リグを作る。パーツ幅はスプライトの大きさに比例させる */
+function rigFromJoints(jointsN, w, h) {
+  const joints = {};
+  for (const k in jointsN) joints[k] = [jointsN[k][0] * w, jointsN[k][1] * h];
+  const scale = (w + h) / (520 + 800);
+  const parts = HUMAN_RIG.parts.map(p => ({ ...p, width: p.width * scale }));
+  return { joints, parts };
+}
+
 const TEMPLATES = {
   fish: {
     id: "fish", name: "さかな", emoji: "🐟",

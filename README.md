@@ -9,4 +9,7 @@
 
 外部ライブラリなし(マーカー検出・射影変換も自前実装)。`little-planet/index.html` を開くだけで動く。
 
+ラズパイ+プロジェクターでの常設ブース用に、永続化と AnimatedDrawings 連携
+(にんげん自動リグ)を担う依存ゼロのサーバも同梱: [server/README.md](server/README.md)
+
 詳しくは [little-planet/README.md](little-planet/README.md) を参照。

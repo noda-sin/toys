@@ -96,12 +96,20 @@
     return () => selected;
   }
 
+  /* ================= キオスクモード (プロジェクター常設用) ================= */
+
+  if (new URLSearchParams(location.search).has("kiosk")) {
+    document.body.classList.add("kiosk");
+    $("#world-hint").textContent = `スマホで ${location.origin} を ひらいて スキャンしよう!`;
+  }
+
   /* ================= 行き先ピッカー (じゆうモード用) ================= */
 
   const HABITATS = [
     { id: "sea", name: "うみ", emoji: "🌊" },
     { id: "sky", name: "そら", emoji: "☁️" },
     { id: "land", name: "りく", emoji: "🛣️" },
+    { id: "human", name: "にんげんにする", emoji: "🕺" },
   ];
 
   function buildHabitatChips(containerSel) {
@@ -124,6 +132,147 @@
 
   const getScanHabitat = buildHabitatChips("#scan-habitat");
   const getDrawHabitat = buildHabitatChips("#draw-habitat");
+
+  /* ================= にんげんリグ確認エディタ =================
+   * じゆう描画を「にんげん」として放つとき、関節位置を決める。
+   * まず /api/pose (AnimatedDrawings のポーズ推定) に自動配置を頼み、
+   * サービスが無い/失敗したら標準骨格を初期値にする。
+   * どちらの場合もドットをドラッグして手で直せる (Meta のデモと同じ流儀) */
+
+  const RIG_BONES = [
+    ["headTop", "hips"], ["shoulderL", "shoulderR"], ["hipL", "hipR"],
+    ["shoulderR", "elbowR"], ["elbowR", "wristR"],
+    ["shoulderL", "elbowL"], ["elbowL", "wristL"],
+    ["hipR", "kneeR"], ["kneeR", "ankleR"],
+    ["hipL", "kneeL"], ["kneeL", "ankleL"],
+  ];
+
+  const rigModal = $("#rig-modal");
+  const rigCanvas = $("#rig-canvas");
+  let rigJoints = null;     // 表示座標系 {name: [x,y]}
+  let rigSprite = null;
+  let rigDrag = null;
+  let rigResolve = null;
+
+  async function fetchAutoJoints(sprite) {
+    try {
+      const r = await fetch("/api/pose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: sprite.toDataURL("image/png") }),
+      });
+      if (!r.ok) return null;
+      const body = await r.json();
+      return body.joints || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* sprite を表示し、正規化関節 (0..1) を返す。キャンセルで null */
+  async function editRig(sprite) {
+    rigSprite = sprite;
+    const maxW = Math.min(430, window.innerWidth - 80);
+    const maxH = window.innerHeight * 0.52;
+    const s = Math.min(maxW / sprite.width, maxH / sprite.height);
+    rigCanvas.width = Math.round(sprite.width * s);
+    rigCanvas.height = Math.round(sprite.height * s);
+
+    rigModal.classList.remove("hidden");
+    $("#rig-msg").textContent = "🤖 ほねを かんがえちゅう…";
+
+    const auto = await fetchAutoJoints(sprite);   // ML 自動配置 (無ければ null)
+    const jointsN = auto || DEFAULT_JOINTS_N;
+    $("#rig-msg").textContent = auto
+      ? "✨ ほねを つけたよ! ずれていたら ● を うごかしてね"
+      : "ほねの ● を えの かんせつに あわせてね";
+
+    rigJoints = {};
+    for (const k in DEFAULT_JOINTS_N) {
+      const p = jointsN[k] || DEFAULT_JOINTS_N[k];
+      rigJoints[k] = [p[0] * rigCanvas.width, p[1] * rigCanvas.height];
+    }
+    drawRig();
+
+    return new Promise(resolve => { rigResolve = resolve; });
+  }
+
+  function drawRig() {
+    const ctx = rigCanvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, rigCanvas.width, rigCanvas.height);
+    ctx.drawImage(rigSprite, 0, 0, rigCanvas.width, rigCanvas.height);
+    if (!rigJoints) return;
+    ctx.strokeStyle = "rgba(74,163,223,0.9)";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    for (const [a, b] of RIG_BONES) {
+      ctx.beginPath();
+      ctx.moveTo(rigJoints[a][0], rigJoints[a][1]);
+      ctx.lineTo(rigJoints[b][0], rigJoints[b][1]);
+      ctx.stroke();
+    }
+    for (const k in rigJoints) {
+      const side = k.endsWith("R") ? "#e74c3c" : k.endsWith("L") ? "#3498db" : "#ff8c42";
+      ctx.fillStyle = side;
+      ctx.beginPath();
+      ctx.arc(rigJoints[k][0], rigJoints[k][1], 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+  }
+
+  function rigPos(ev) {
+    const rect = rigCanvas.getBoundingClientRect();
+    return {
+      x: (ev.clientX - rect.left) * (rigCanvas.width / rect.width),
+      y: (ev.clientY - rect.top) * (rigCanvas.height / rect.height),
+    };
+  }
+
+  rigCanvas.addEventListener("pointerdown", ev => {
+    if (!rigJoints) return;
+    const p = rigPos(ev);
+    let best = null, bestD = 26;
+    for (const k in rigJoints) {
+      const d = Math.hypot(rigJoints[k][0] - p.x, rigJoints[k][1] - p.y);
+      if (d < bestD) { bestD = d; best = k; }
+    }
+    rigDrag = best;
+    if (rigDrag) rigCanvas.setPointerCapture(ev.pointerId);
+  });
+
+  rigCanvas.addEventListener("pointermove", ev => {
+    if (!rigDrag || !rigJoints) return;
+    const p = rigPos(ev);
+    rigJoints[rigDrag][0] = Math.max(0, Math.min(rigCanvas.width, p.x));
+    rigJoints[rigDrag][1] = Math.max(0, Math.min(rigCanvas.height, p.y));
+    drawRig();
+  });
+
+  rigCanvas.addEventListener("pointerup", () => { rigDrag = null; });
+
+  $("#btn-rig-ok").addEventListener("click", () => {
+    if (!rigResolve) return;
+    const out = {};
+    for (const k in rigJoints) {
+      out[k] = [rigJoints[k][0] / rigCanvas.width, rigJoints[k][1] / rigCanvas.height];
+    }
+    rigModal.classList.add("hidden");
+    const resolve = rigResolve;
+    rigResolve = null;
+    resolve(out);
+  });
+
+  $("#btn-rig-cancel").addEventListener("click", () => {
+    if (!rigResolve) return;
+    rigModal.classList.add("hidden");
+    const resolve = rigResolve;
+    rigResolve = null;
+    resolve(null);
+  });
 
   /* ================= スキャン ================= */
 
@@ -275,10 +424,20 @@
     $("#scan-step-preview").classList.add("hidden");
   });
 
-  $("#btn-release").addEventListener("click", () => {
+  $("#btn-release").addEventListener("click", async () => {
     if (!scannedSprite) return;
     const tid = getScanTid();
-    const opts = TEMPLATES[tid].path ? {} : { habitat: getScanHabitat() };
+    let opts = {};
+    if (!TEMPLATES[tid].path) {
+      const hb = getScanHabitat();
+      if (hb === "human") {
+        const joints = await editRig(scannedSprite);
+        if (!joints) return;                       // キャンセルなら放流しない
+        opts = { habitat: "land", joints };
+      } else {
+        opts = { habitat: hb };
+      }
+    }
     World.addCreature(tid, scannedSprite, opts);
     scannedSprite = null;
     $("#scan-step-adjust").classList.add("hidden");
@@ -434,7 +593,7 @@
 
   drawCanvas.addEventListener("pointerup", () => { drawing = false; });
 
-  $("#btn-draw-release").addEventListener("click", () => {
+  $("#btn-draw-release").addEventListener("click", async () => {
     const t = TEMPLATES[drawTid];
     let spr;
     if (t.path) {
@@ -476,7 +635,18 @@
       }
     }
 
-    World.addCreature(drawTid, spr, t.path ? {} : { habitat: getDrawHabitat() });
+    let opts = {};
+    if (!t.path) {
+      const hb = getDrawHabitat();
+      if (hb === "human") {
+        const joints = await editRig(spr);
+        if (!joints) return;
+        opts = { habitat: "land", joints };
+      } else {
+        opts = { habitat: hb };
+      }
+    }
+    World.addCreature(drawTid, spr, opts);
     showView("world");
   });
 

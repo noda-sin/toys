@@ -82,8 +82,14 @@ const World = (() => {
       excited: 0,       // タップしたときの盛り上がり
       spin: 0,
     };
+    // 自由描画に手動リグ (正規化関節) が付いている場合
+    if (opts.joints) {
+      c.jointsN = opts.joints;
+      c.puppet = makePuppet(sprite, rigFromJoints(opts.joints, sprite.width, sprite.height));
+      c.speed *= 0.5;
+    }
     // 骨格リグ付きテンプレート (にんげん) はスプライトをパーツに分解する
-    if (t && t.rig) {
+    else if (t && t.rig) {
       let spr = sprite;
       if (sprite.width !== t.box.w || sprite.height !== t.box.h) {
         // 保存データ等で縮小されている場合はテンプレート座標系に戻す
@@ -100,7 +106,7 @@ const World = (() => {
     c.baseY = c.y;
     creatures.push(c);
     burst(c.x * W, c.y * H, "#ffd76e", 18);
-    save();
+    if (!opts.fromStore) persist(c);
     return c;
   }
 
@@ -152,7 +158,12 @@ const World = (() => {
 
   function clearCreatures() {
     creatures = [];
-    save();
+    knownIds.clear();
+    if (storeMode === "server") {
+      fetch("/api/creatures", { method: "DELETE" }).catch(() => {});
+    } else {
+      saveLocal();
+    }
   }
 
   function count() { return creatures.length; }
@@ -657,42 +668,104 @@ const World = (() => {
     addCreature(tid, makeSampleSprite(t));
   }
 
-  /* ---------------- 保存 / 復元 ---------------- */
+  /* ---------------- 保存 / 復元 ----------------
+   * サーバ (/api/creatures) があればそちらへ永続化し、他の端末で
+   * 追加された生きものもポーリングで取り込む (ブース構成)。
+   * サーバが無ければ従来どおり localStorage に保存する */
 
   const STORE_KEY = "oekaki-planet-creatures-v1";
+  let storeMode = "local";        // 'server' = 保存サーバあり
+  const knownIds = new Set();
 
-  function save() {
+  function creatureRecord(c) {
+    // 保存サイズを抑えるため縮小して保存
+    const small = document.createElement("canvas");
+    const s = 280 / c.sprite.width;
+    small.width = 280;
+    small.height = Math.round(c.sprite.height * s);
+    small.getContext("2d").drawImage(c.sprite, 0, 0, small.width, small.height);
+    const rec = { tid: c.tid, habitat: c.habitat, data: small.toDataURL("image/png") };
+    if (c.jointsN) rec.joints = c.jointsN;
+    return rec;
+  }
+
+  function persist(c) {
+    if (storeMode === "server") {
+      fetch("/api/creatures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creatureRecord(c)),
+      })
+        .then(r => (r.ok ? r.json() : null))
+        .then(res => {
+          if (res && res.id) {
+            c.storeId = res.id;
+            knownIds.add(res.id);
+          }
+        })
+        .catch(() => {});
+    } else {
+      saveLocal();
+    }
+  }
+
+  function saveLocal() {
     try {
-      const list = creatures.slice(-12).map(c => {
-        // 保存サイズを抑えるため縮小して保存
-        const small = document.createElement("canvas");
-        const s = 280 / c.sprite.width;
-        small.width = 280;
-        small.height = Math.round(c.sprite.height * s);
-        small.getContext("2d").drawImage(c.sprite, 0, 0, small.width, small.height);
-        return { tid: c.tid, habitat: c.habitat, data: small.toDataURL("image/png") };
-      });
+      const list = creatures.slice(-12).map(creatureRecord);
       localStorage.setItem(STORE_KEY, JSON.stringify(list));
     } catch (e) { /* 容量オーバーなどは無視 */ }
   }
 
-  function load() {
+  function spawnRecord(item) {
+    if (!TEMPLATES[item.tid]) return;
+    const img = new Image();
+    img.onload = () => {
+      const spr = document.createElement("canvas");
+      spr.width = img.width;
+      spr.height = img.height;
+      spr.getContext("2d").drawImage(img, 0, 0);
+      addCreature(item.tid, spr, {
+        habitat: item.habitat,
+        joints: item.joints,
+        fromStore: true,
+      });
+    };
+    img.src = item.data;
+  }
+
+  async function load() {
+    try {
+      if (location.protocol === "file:") throw new Error("no server on file:");
+      const r = await fetch("/api/creatures", { cache: "no-store" });
+      if (r.ok) {
+        storeMode = "server";
+        const body = await r.json();
+        for (const item of body.creatures) {
+          knownIds.add(item.id);
+          spawnRecord(item);
+        }
+        setInterval(pollServer, 3000);
+        return;
+      }
+    } catch (e) { /* サーバなし → localStorage へ */ }
     let list;
     try {
       list = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
     } catch (e) { return; }
-    for (const item of list) {
-      if (!TEMPLATES[item.tid]) continue;
-      const img = new Image();
-      img.onload = () => {
-        const spr = document.createElement("canvas");
-        spr.width = img.width;
-        spr.height = img.height;
-        spr.getContext("2d").drawImage(img, 0, 0);
-        addCreature(item.tid, spr, { habitat: item.habitat });
-      };
-      img.src = item.data;
-    }
+    for (const item of list) spawnRecord(item);
+  }
+
+  async function pollServer() {
+    try {
+      const r = await fetch("/api/creatures", { cache: "no-store" });
+      if (!r.ok) return;
+      const body = await r.json();
+      for (const item of body.creatures) {
+        if (knownIds.has(item.id)) continue;
+        knownIds.add(item.id);
+        spawnRecord(item);
+      }
+    } catch (e) { /* 一時的なエラーは無視 */ }
   }
 
   return { init, addCreature, addSample, clearCreatures, count, load };
