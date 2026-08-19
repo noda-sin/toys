@@ -38,6 +38,17 @@ sudo systemctl enable --now oekaki-planet
 curl http://localhost:8000/api/creatures
 ```
 
+### 表示方法は2通り
+
+| 方式 | 構成 | 向き不向き |
+|---|---|---|
+| **A. HDMI 直結** | ラズパイの Chromium キオスク → HDMI → プロジェクター | 確実・低遅延。HDMI 入力のある機種なら何でも可 |
+| **B. ブラウザ直接表示** | Google TV 搭載プロジェクターに [Fully Kiosk Browser](https://www.fully-kiosk.com/) を入れ、`http://raspberrypi.local:8000/little-planet/?kiosk=1` を全画面表示 | 配線レス。自動起動・スリープ防止・自動リロードあり。Google TV 機 (XGIMI 等) 限定 — Aladdin は独自 OS なので不可 |
+
+ワールド画面は表示専用の軽い Canvas ページ (カメラ等はスマホ側でしか使わない)
+なので、Android TV の WebView でも動く。B 方式で万一描画が重い機種だったら
+A 方式にフォールバックすればよい。
+
 ### プロジェクターに全画面表示 (キオスクモード)
 
 `?kiosk=1` を付けるとタブや操作ボタンが消え、ワールドだけの全画面になり、
