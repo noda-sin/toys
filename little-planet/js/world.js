@@ -106,6 +106,12 @@ const World = (() => {
     return { h, night: Math.min(1, Math.max(0, night)), dusk: Math.max(0, dusk) };
   }
 
+  /* おやすみ時間 (21時〜朝5時)。見た目の夜 (19時〜) より遅く始めて、
+   * 夕食後のブースのゴールデンタイムにみんなが寝てしまわないようにする */
+  function isAsleep() {
+    return sky.h >= 21 || sky.h < 5;
+  }
+
   function hexToRgb(hex) {
     return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
   }
@@ -308,7 +314,7 @@ const World = (() => {
 
     // 生きものがエサへ向かう
     for (const c of creatures) {
-      if (c.surface || c.puppet && sky.night > 0.6) continue;
+      if (c.surface || (c.puppet && isAsleep())) continue;
       let best = null, bestD = 0.5;
       for (const f of foods) {
         if (f.habitat !== c.habitat) continue;
@@ -385,7 +391,7 @@ const World = (() => {
 
   function updateGreets(dt) {
     greetTimer += dt;
-    if (greetTimer < 0.5 || sky.night > 0.6) return;
+    if (greetTimer < 0.5 || isAsleep()) return;
     greetTimer = 0;
     for (let i = 0; i < creatures.length; i++) {
       for (let j = i + 1; j < creatures.length; j++) {
@@ -722,7 +728,7 @@ const World = (() => {
   function update(dt) {
     sky = skyState();
     if (window.Sound) Sound.setDay(sky.night < 0.5);
-    const asleep = sky.night > 0.6;
+    const asleep = isAsleep();
 
     for (const cl of clouds) {
       cl.x += cl.v * dt;
@@ -1207,7 +1213,7 @@ const World = (() => {
     const d = Math.min(1, c.excited * 1.4);   // 0=通常 1=ダンス
     const wp = time * 6.5 + c.phase;
     const dp = time * 9 + c.phase;
-    const asleep = sky.night > 0.6;
+    const asleep = isAsleep();
     const mode = asleep ? "sleep" : (c.motion ? c.motion.mode : "walk");
 
     let base;
@@ -1299,7 +1305,7 @@ const World = (() => {
   function drawDrive(c, cx) {
     const spr = c.sprite;
     const roadY = H * ((LAYOUT.roadTop + LAYOUT.roadBottom) / 2) + 6;
-    const slow = sky.night > 0.6 ? 0.25 : 1;
+    const slow = isAsleep() ? 0.25 : 1;
     const p = Math.sin(time * (6 + c.excited * 4) * slow + c.phase);
     const hop = Math.max(0, p) * spr.height * c.scale * (0.06 + c.excited * 0.25) * slow;
 
