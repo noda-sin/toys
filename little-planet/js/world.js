@@ -46,25 +46,28 @@ const World = (() => {
   }
 
   function resize() {
+    // 別タブ表示中 (display:none) は clientWidth が 0 になるので無視する
+    if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
     dpr = Math.min(2, window.devicePixelRatio || 1);
     W = canvas.clientWidth;
     H = canvas.clientHeight;
-    canvas.width = Math.max(1, Math.round(W * dpr));
-    canvas.height = Math.max(1, Math.round(H * dpr));
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
   }
 
   /* ---------------- 生きものの追加 ---------------- */
 
   function addCreature(templateId, sprite, opts = {}) {
     const t = TEMPLATES[templateId];
-    if (!t) return null;
+    const habitat = opts.habitat || (t && t.habitat);
+    if (!habitat) return null;
     while (creatures.length >= MAX_CREATURES) creatures.shift();
 
-    const zone = zoneFor(t.habitat);
+    const zone = zoneFor(habitat);
     const c = {
       tid: templateId,
-      habitat: t.habitat,
-      facing: t.facing,
+      habitat,
+      facing: (t && t.facing) || "left",
       sprite,
       x: opts.x !== undefined ? opts.x : 0.2 + Math.random() * 0.6,   // 0..1 正規化
       y: opts.y !== undefined ? opts.y : zone.min + Math.random() * (zone.max - zone.min),
@@ -74,7 +77,7 @@ const World = (() => {
       phase: Math.random() * Math.PI * 2,
       freq: 5 + Math.random() * 3,
       scale: 0,
-      targetScale: scaleFor(t),
+      sizeFrac: 0.13 + Math.random() * 0.05,   // 画面幅に対する大きさの比率
       born: 0,          // 0→1 登場アニメ
       excited: 0,       // タップしたときの盛り上がり
       spin: 0,
@@ -92,10 +95,14 @@ const World = (() => {
     return { min: 0.585, max: 0.585 };  // land: 道路の上
   }
 
-  function scaleFor(t) {
-    // 画面幅の 14〜18% くらいの大きさに
-    const target = W * (0.13 + Math.random() * 0.05);
-    return target / t.box.w;
+  /* 現在の画面サイズに対するスプライトの表示倍率。
+   * 追加時に固定せず毎フレーム計算する — canvas が非表示 (幅0) の
+   * タブから放流されたときや、ウィンドウリサイズ後も正しく描ける */
+  function fitScale(c) {
+    return Math.min(
+      (c.sizeFrac * W) / c.sprite.width,
+      (H * 0.22) / c.sprite.height
+    );
   }
 
   function clearCreatures() {
@@ -187,7 +194,7 @@ const World = (() => {
       }
       // land はバウンドのみ (描画時)
 
-      c.scale = c.targetScale * easeOutBack(c.born);
+      c.scale = fitScale(c) * easeOutBack(c.born);
     }
 
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -501,7 +508,7 @@ const World = (() => {
   }
 
   function addSample() {
-    const tid = TEMPLATE_IDS[Math.floor(Math.random() * TEMPLATE_IDS.length)];
+    const tid = SHAPE_TEMPLATE_IDS[Math.floor(Math.random() * SHAPE_TEMPLATE_IDS.length)];
     const t = TEMPLATES[tid];
     addCreature(tid, makeSampleSprite(t));
   }
@@ -519,7 +526,7 @@ const World = (() => {
         small.width = 280;
         small.height = Math.round(c.sprite.height * s);
         small.getContext("2d").drawImage(c.sprite, 0, 0, small.width, small.height);
-        return { tid: c.tid, data: small.toDataURL("image/png") };
+        return { tid: c.tid, habitat: c.habitat, data: small.toDataURL("image/png") };
       });
       localStorage.setItem(STORE_KEY, JSON.stringify(list));
     } catch (e) { /* 容量オーバーなどは無視 */ }
@@ -531,15 +538,14 @@ const World = (() => {
       list = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
     } catch (e) { return; }
     for (const item of list) {
-      const t = TEMPLATES[item.tid];
-      if (!t) continue;
+      if (!TEMPLATES[item.tid]) continue;
       const img = new Image();
       img.onload = () => {
         const spr = document.createElement("canvas");
-        spr.width = t.box.w;
-        spr.height = t.box.h;
-        spr.getContext("2d").drawImage(img, 0, 0, spr.width, spr.height);
-        addCreature(item.tid, spr);
+        spr.width = img.width;
+        spr.height = img.height;
+        spr.getContext("2d").drawImage(img, 0, 0);
+        addCreature(item.tid, spr, { habitat: item.habitat });
       };
       img.src = item.data;
     }

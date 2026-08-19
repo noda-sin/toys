@@ -96,6 +96,35 @@
     return () => selected;
   }
 
+  /* ================= 行き先ピッカー (じゆうモード用) ================= */
+
+  const HABITATS = [
+    { id: "sea", name: "うみ", emoji: "🌊" },
+    { id: "sky", name: "そら", emoji: "☁️" },
+    { id: "land", name: "りく", emoji: "🛣️" },
+  ];
+
+  function buildHabitatChips(containerSel) {
+    const row = $(containerSel);
+    let selected = "sea";
+    for (const hb of HABITATS) {
+      const b = document.createElement("button");
+      b.className = "tmpl-chip" + (hb.id === selected ? " active" : "");
+      b.textContent = `${hb.emoji} ${hb.name}`;
+      b.dataset.hid = hb.id;
+      b.addEventListener("click", () => {
+        selected = hb.id;
+        row.querySelectorAll(".tmpl-chip").forEach(x =>
+          x.classList.toggle("active", x.dataset.hid === hb.id));
+      });
+      row.append(b);
+    }
+    return () => selected;
+  }
+
+  const getScanHabitat = buildHabitatChips("#scan-habitat");
+  const getDrawHabitat = buildHabitatChips("#draw-habitat");
+
   /* ================= スキャン ================= */
 
   const getScanTid = buildChips("#scan-template-chips", () => {});
@@ -222,7 +251,16 @@
       alert("よみとりに しっぱいしたよ。● の いちを たしかめてね。");
       return;
     }
-    scannedSprite = Scan.extractSprite(sheet, t);
+    if (t.path) {
+      scannedSprite = Scan.extractSprite(sheet, t);
+    } else {
+      scannedSprite = Scan.extractFreeSprite(sheet);
+      if (!scannedSprite) {
+        alert("えが みつからなかったよ。ふとい せんで おおきく かいてみてね。");
+        return;
+      }
+    }
+    $("#scan-habitat-row").classList.toggle("hidden", !!t.path);
 
     const pv = $("#preview-canvas");
     pv.width = scannedSprite.width;
@@ -239,7 +277,9 @@
 
   $("#btn-release").addEventListener("click", () => {
     if (!scannedSprite) return;
-    World.addCreature(getScanTid(), scannedSprite);
+    const tid = getScanTid();
+    const opts = TEMPLATES[tid].path ? {} : { habitat: getScanHabitat() };
+    World.addCreature(tid, scannedSprite, opts);
     scannedSprite = null;
     $("#scan-step-adjust").classList.add("hidden");
     $("#scan-step-preview").classList.add("hidden");
@@ -274,15 +314,27 @@
     strokes.width = t.box.w;
     strokes.height = t.box.h;
     strokesCtx = strokes.getContext("2d");
+    $("#draw-habitat-row").classList.toggle("hidden", !!t.path);
     renderDrawCanvas();
   }
 
   function renderDrawCanvas() {
     const t = TEMPLATES[drawTid];
-    const path = t.path();
     drawCtx.setTransform(1, 0, 0, 1, 0, 0);
     drawCtx.fillStyle = "#ffffff";
     drawCtx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+    if (!t.path) {
+      // じゆうモード: 点線のガイドわくのみ
+      drawCtx.strokeStyle = "#cccccc";
+      drawCtx.lineWidth = 4;
+      drawCtx.setLineDash([16, 12]);
+      roundRectPath(drawCtx, 12, 12, drawCanvas.width - 24, drawCanvas.height - 24, 24);
+      drawCtx.stroke();
+      drawCtx.setLineDash([]);
+      drawCtx.drawImage(strokes, 0, 0);
+      return;
+    }
+    const path = t.path();
     drawCtx.drawImage(strokes, 0, 0);
     drawCtx.strokeStyle = "#000000";
     drawCtx.lineWidth = 10;
@@ -384,30 +436,47 @@
 
   $("#btn-draw-release").addEventListener("click", () => {
     const t = TEMPLATES[drawTid];
-    const path = t.path();
-    const spr = document.createElement("canvas");
-    spr.width = t.box.w;
-    spr.height = t.box.h;
-    const sctx = spr.getContext("2d");
-    // 紙と同じ構成: 白地 + ユーザーの塗り + 輪郭
-    sctx.fillStyle = "#ffffff";
-    sctx.fill(path);
-    sctx.save();
-    sctx.clip(path);
-    sctx.drawImage(strokes, 0, 0);
-    sctx.restore();
-    sctx.globalCompositeOperation = "destination-in";
-    sctx.fill(path);
-    sctx.globalCompositeOperation = "source-over";
-    sctx.strokeStyle = "#222222";
-    sctx.lineWidth = 10;
-    sctx.lineJoin = "round";
-    sctx.stroke(path);
-    sctx.lineWidth = 5;
-    sctx.fillStyle = "#222222";
-    t.decor(sctx);
+    let spr;
+    if (t.path) {
+      // 紙と同じ構成: 白地 + ユーザーの塗り + 輪郭
+      const path = t.path();
+      spr = document.createElement("canvas");
+      spr.width = t.box.w;
+      spr.height = t.box.h;
+      const sctx = spr.getContext("2d");
+      sctx.fillStyle = "#ffffff";
+      sctx.fill(path);
+      sctx.save();
+      sctx.clip(path);
+      sctx.drawImage(strokes, 0, 0);
+      sctx.restore();
+      sctx.globalCompositeOperation = "destination-in";
+      sctx.fill(path);
+      sctx.globalCompositeOperation = "source-over";
+      sctx.strokeStyle = "#222222";
+      sctx.lineWidth = 10;
+      sctx.lineJoin = "round";
+      sctx.stroke(path);
+      sctx.lineWidth = 5;
+      sctx.fillStyle = "#222222";
+      t.decor(sctx);
+    } else {
+      // じゆうモード: 白地 + ストロークからインク検出で切り抜き
+      const comp = document.createElement("canvas");
+      comp.width = t.box.w;
+      comp.height = t.box.h;
+      const cc = comp.getContext("2d");
+      cc.fillStyle = "#ffffff";
+      cc.fillRect(0, 0, comp.width, comp.height);
+      cc.drawImage(strokes, 0, 0);
+      spr = Scan.extractInk(comp);
+      if (!spr) {
+        alert("えが みつからなかったよ。ふとい せんで おおきく かいてみてね。");
+        return;
+      }
+    }
 
-    World.addCreature(drawTid, spr);
+    World.addCreature(drawTid, spr, t.path ? {} : { habitat: getDrawHabitat() });
     showView("world");
   });
 

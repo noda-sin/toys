@@ -165,9 +165,17 @@ const TEMPLATES = {
     box: { w: 800, h: 420 },
     path: carPath, decor: carDecor,
   },
+  /* じゆうモード: 形は決めず、描かれたインクから切り抜く */
+  free: {
+    id: "free", name: "じゆうに かく", emoji: "✏️",
+    habitat: null, facing: "left",
+    box: { w: 800, h: 800 },
+    path: null, decor: null,
+  },
 };
 
 const TEMPLATE_IDS = Object.keys(TEMPLATES);
+const SHAPE_TEMPLATE_IDS = TEMPLATE_IDS.filter(id => TEMPLATES[id].path);
 
 /* テンプレートを DRAW_AREA の中央に収める配置 (シート座標系) */
 function getPlacement(t) {
@@ -206,7 +214,13 @@ function renderSheet(canvas, t, res = 2) {
   ctx.fillText(`〜 ${t.name} 〜`, SHEET_W / 2, 195);
   ctx.font = '28px "Hiragino Maru Gothic ProN", "BIZ UDGothic", sans-serif';
   ctx.fillStyle = "#777777";
-  ctx.fillText("くろい わくの なかに じゆうに いろを ぬってね!", SHEET_W / 2, 255);
+  if (t.path) {
+    ctx.fillText("くろい わくの なかに じゆうに いろを ぬってね!", SHEET_W / 2, 255);
+  } else {
+    // じゆうシート: 絵の中にガイド文を入れるとスキャンに写り込むので上部にまとめる
+    ctx.fillText("わくの なかに すきなものを ひとつ おおきく かこう!", SHEET_W / 2, 245);
+    ctx.fillText("りんかくは ふとい くろペンで しっかり とじて かいてね", SHEET_W / 2, 290);
+  }
   ctx.fillText("かきおわったら アプリで スキャンしよう (すみの ■ は ぬらないでね)", SHEET_W / 2, SHEET_H - 240);
 
   // 描画エリアのガイド枠
@@ -217,26 +231,48 @@ function renderSheet(canvas, t, res = 2) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // テンプレート輪郭
-  const pl = getPlacement(t);
-  ctx.save();
-  ctx.translate(pl.ox, pl.oy);
-  ctx.scale(pl.scale, pl.scale);
-  const path = t.path();
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = 9 / pl.scale;
-  ctx.lineJoin = "round";
-  ctx.stroke(path);
-  ctx.lineWidth = 5 / pl.scale;
-  ctx.fillStyle = "#000000";
-  t.decor(ctx);
-  ctx.restore();
+  if (t.path) {
+    // テンプレート輪郭
+    const pl = getPlacement(t);
+    ctx.save();
+    ctx.translate(pl.ox, pl.oy);
+    ctx.scale(pl.scale, pl.scale);
+    const path = t.path();
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 9 / pl.scale;
+    ctx.lineJoin = "round";
+    ctx.stroke(path);
+    ctx.lineWidth = 5 / pl.scale;
+    ctx.fillStyle = "#000000";
+    t.decor(ctx);
+    ctx.restore();
+  }
+  // じゆうシートは点線わくの中を空のままにする (ガイド文は上部に記載済み)
 
   return canvas;
 }
 
 /* サムネイル (輪郭のみの小さいプレビュー) */
 function renderThumb(canvas, t, size = 150) {
+  if (!t.path) {
+    // じゆうモード: 点線わく + えんぴつ
+    canvas.width = size;
+    canvas.height = Math.round(size * 0.62);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#bbbbbb";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 8]);
+    roundRectPath(ctx, 8, 8, canvas.width - 16, canvas.height - 16, 14);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = `${Math.round(size * 0.3)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("✏️", canvas.width / 2, canvas.height / 2);
+    return canvas;
+  }
   const ratio = t.box.h / t.box.w;
   canvas.width = size;
   canvas.height = Math.round(size * ratio);

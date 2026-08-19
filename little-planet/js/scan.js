@@ -337,5 +337,150 @@ const Scan = (() => {
     return spr;
   }
 
-  return { loadImage, toCanvas, detectMarkers, computeHomography, applyH, warpToSheet, extractSprite };
+  /* =========================================================
+   * 自由描画モード: 描かれたインクから形そのものを推定して切り抜く
+   *   ① インク画素の検出 (暗い or 彩度が高い)
+   *   ② 膨張処理で輪郭のかすれ・すき間を閉じる
+   *   ③ 縁からフラッドフィル → 届かない場所 = 線に囲まれた内側
+   *   ④ 最大連結成分だけを残して切り出し (ゴミ・小さな落書きを除去)
+   * ========================================================= */
+
+  function dilate(mask, w, h) {
+    const out = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (mask[i] ||
+            (x > 0 && mask[i - 1]) || (x < w - 1 && mask[i + 1]) ||
+            (y > 0 && mask[i - w]) || (y < h - 1 && mask[i + w])) {
+          out[i] = 1;
+        }
+      }
+    }
+    return out;
+  }
+
+  /* 白背景の canvas から絵を切り抜く。見つからなければ null */
+  function extractInk(canvas) {
+    const w = canvas.width, h = canvas.height;
+    const ctx = canvas.getContext("2d");
+    const src = ctx.getImageData(0, 0, w, h);
+    const d = src.data;
+
+    // ① インク画素
+    let ink = new Uint8Array(w * h);
+    for (let i = 0, j = 0; i < w * h; i++, j += 4) {
+      const r = d[j], g = d[j + 1], b = d[j + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mn < 170 || mx - mn > 45) ink[i] = 1;
+    }
+
+    // ② closing (輪郭の小さなすき間を塞ぐ)
+    for (let it = 0; it < 3; it++) ink = dilate(ink, w, h);
+
+    // ③ 外側判定
+    const outside = new Uint8Array(w * h);
+    const stack = new Int32Array(w * h);
+    let sp = 0;
+    const push = i => {
+      if (!outside[i] && !ink[i]) { outside[i] = 1; stack[sp++] = i; }
+    };
+    for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+    while (sp > 0) {
+      const i = stack[--sp];
+      const x = i % w, y = (i / w) | 0;
+      if (x > 0) push(i - 1);
+      if (x < w - 1) push(i + 1);
+      if (y > 0) push(i - w);
+      if (y < h - 1) push(i + w);
+    }
+
+    // ④ 内側 (= 外側でない場所) の最大連結成分
+    const labels = new Int32Array(w * h);
+    let label = 0, bestLabel = 0, bestArea = 0;
+    let bx0 = 0, by0 = 0, bx1 = 0, by1 = 0;
+    for (let start = 0; start < w * h; start++) {
+      if (outside[start] || labels[start]) continue;
+      label++;
+      let sp2 = 0;
+      stack[sp2++] = start;
+      labels[start] = label;
+      let area = 0, minX = w, maxX = 0, minY = h, maxY = 0;
+      while (sp2 > 0) {
+        const i = stack[--sp2];
+        const x = i % w, y = (i / w) | 0;
+        area++;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (x > 0     && !outside[i - 1] && !labels[i - 1]) { labels[i - 1] = label; stack[sp2++] = i - 1; }
+        if (x < w - 1 && !outside[i + 1] && !labels[i + 1]) { labels[i + 1] = label; stack[sp2++] = i + 1; }
+        if (y > 0     && !outside[i - w] && !labels[i - w]) { labels[i - w] = label; stack[sp2++] = i - w; }
+        if (y < h - 1 && !outside[i + w] && !labels[i + w]) { labels[i + w] = label; stack[sp2++] = i + w; }
+      }
+      if (area > bestArea) {
+        bestArea = area; bestLabel = label;
+        bx0 = minX; by0 = minY; bx1 = maxX; by1 = maxY;
+      }
+    }
+    if (bestArea < w * h * 0.004) return null; // 小さすぎ = 絵がない
+
+    // 切り出し
+    const pad = 6;
+    const x0 = Math.max(0, bx0 - pad), y0 = Math.max(0, by0 - pad);
+    const x1 = Math.min(w - 1, bx1 + pad), y1 = Math.min(h - 1, by1 + pad);
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+    const spr = document.createElement("canvas");
+    spr.width = cw;
+    spr.height = ch;
+    const sctx = spr.getContext("2d");
+    const oimg = sctx.createImageData(cw, ch);
+    const od = oimg.data;
+    for (let y = 0; y < ch; y++) {
+      for (let x = 0; x < cw; x++) {
+        const si = (y + y0) * w + (x + x0);
+        if (labels[si] !== bestLabel) continue;
+        const sj = si * 4;
+        const oi = (y * cw + x) * 4;
+        od[oi] = d[sj];
+        od[oi + 1] = d[sj + 1];
+        od[oi + 2] = d[sj + 2];
+        od[oi + 3] = 255;
+      }
+    }
+    sctx.putImageData(oimg, 0, 0);
+    return spr;
+  }
+
+  /* 射影変換済みシートの描画エリアから自由描画を切り抜く */
+  function extractFreeSprite(sheetCanvas) {
+    const s = sheetCanvas.width / SHEET_W;
+    const crop = document.createElement("canvas");
+    crop.width = Math.round(DRAW_AREA.w * s);
+    crop.height = Math.round(DRAW_AREA.h * s);
+    const cctx = crop.getContext("2d");
+    cctx.drawImage(
+      sheetCanvas,
+      DRAW_AREA.x * s, DRAW_AREA.y * s, crop.width, crop.height,
+      0, 0, crop.width, crop.height
+    );
+
+    // ホワイトバランス補正 (extractSprite と同じ)
+    const white = estimateWhite(sheetCanvas, s);
+    const img = cctx.getImageData(0, 0, crop.width, crop.height);
+    const d = img.data;
+    const gains = white.map(wv => Math.min(3, 250 / Math.max(60, wv)));
+    for (let i = 0; i < d.length; i += 4) {
+      d[i]     = Math.min(255, d[i] * gains[0]);
+      d[i + 1] = Math.min(255, d[i + 1] * gains[1]);
+      d[i + 2] = Math.min(255, d[i + 2] * gains[2]);
+    }
+    cctx.putImageData(img, 0, 0);
+
+    return extractInk(crop);
+  }
+
+  return { loadImage, toCanvas, detectMarkers, computeHomography, applyH, warpToSheet, extractSprite, extractInk, extractFreeSprite };
 })();
