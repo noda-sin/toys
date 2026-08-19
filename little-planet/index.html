@@ -15,6 +15,7 @@
       <button class="tab" data-view="print">🖨️ かみを いんさつ</button>
       <button class="tab" data-view="scan">📷 スキャン</button>
       <button class="tab" data-view="draw">🖍️ がめんで おえかき</button>
+      <button class="tab" data-view="zukan">📖 ずかん</button>
     </nav>
   </header>
 
@@ -22,6 +23,7 @@
     <!-- ============ ワールド ============ -->
     <section id="view-world" class="view active">
       <canvas id="world-canvas"></canvas>
+      <button id="btn-sound" title="おと">🔊</button>
       <div id="world-buttons">
         <button id="btn-sample" class="chip-btn">✨ サンプルを ついか</button>
         <button id="btn-clear-world" class="chip-btn danger">🗑️ ぜんぶ けす</button>
@@ -71,11 +73,23 @@
             <p class="step-label">どこに はなつ?</p>
             <div id="scan-habitat" class="chip-row"></div>
           </div>
+          <div class="name-row">
+            <label>なまえ: <input id="scan-name" maxlength="10" placeholder="なくても OK"></label>
+          </div>
           <div class="btn-row">
             <button id="btn-release" class="big-btn">🌊 せかいへ はなつ!</button>
             <button id="btn-rescan" class="chip-btn">やりなおす</button>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ ずかん ============ -->
+    <section id="view-zukan" class="view">
+      <div class="panel">
+        <h2>📖 みんなの ずかん</h2>
+        <p class="note" id="zukan-count"></p>
+        <div id="zukan-grid"></div>
       </div>
     </section>
 
@@ -94,6 +108,9 @@
         <div id="draw-habitat-row" class="hidden">
           <p class="step-label">どこに はなつ?</p>
           <div id="draw-habitat" class="chip-row"></div>
+        </div>
+        <div class="name-row">
+          <label>なまえ: <input id="draw-name" maxlength="10" placeholder="なくても OK"></label>
         </div>
         <div class="btn-row">
           <button id="btn-draw-release" class="big-btn">🌊 せかいへ はなつ!</button>
@@ -118,6 +135,7 @@
 <!-- 印刷専用領域 -->
 <div id="print-area"><img id="print-img" alt=""></div>
 
+<script src="js/sound.js"></script>
 <script src="js/templates.js"></script>
 <script src="js/scan.js"></script>
 <script src="js/world.js"></script>

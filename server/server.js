@@ -67,8 +67,11 @@ function saveCreature(rec) {
     tid: String(rec.tid || ""),
     habitat: String(rec.habitat || ""),
     data: String(rec.data || ""),
+    ts: Number(rec.ts) || Date.now(),
   };
   if (rec.joints && typeof rec.joints === "object") item.joints = rec.joints;
+  if (rec.name) item.name = String(rec.name).slice(0, 20);
+  if (rec.rare) item.rare = true;
   if (!item.tid || !item.data.startsWith("data:image/")) {
     throw new Error("bad record");
   }

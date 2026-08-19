@@ -62,7 +62,7 @@ cat > ~/.config/autostart/oekaki-kiosk.desktop <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=Oekaki Planet Kiosk
-Exec=chromium-browser --kiosk --noerrdialogs --disable-restore-session-state http://localhost:8000/little-planet/?kiosk=1
+Exec=chromium-browser --kiosk --noerrdialogs --disable-restore-session-state --autoplay-policy=no-user-gesture-required http://localhost:8000/little-planet/?kiosk=1
 EOF
 ```
 

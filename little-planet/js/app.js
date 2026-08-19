@@ -18,8 +18,60 @@
   }
 
   $$(".tab").forEach(btn => {
-    btn.addEventListener("click", () => showView(btn.dataset.view));
+    btn.addEventListener("click", () => {
+      showView(btn.dataset.view);
+      if (btn.dataset.view === "zukan") renderZukan();
+    });
   });
+
+  /* ================= ずかん ================= */
+
+  async function fetchRecords() {
+    try {
+      if (location.protocol !== "file:") {
+        const r = await fetch("/api/creatures", { cache: "no-store" });
+        if (r.ok) return (await r.json()).creatures;
+      }
+    } catch (e) { /* サーバなし */ }
+    try {
+      return JSON.parse(localStorage.getItem("oekaki-planet-creatures-v1") || "[]");
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function renderZukan() {
+    const grid = $("#zukan-grid");
+    const records = (await fetchRecords()).slice().reverse();
+    $("#zukan-count").textContent = records.length
+      ? `いままでに ${records.length}ひき はなたれたよ`
+      : "まだ だれも いないよ。スキャンして ふやそう!";
+    grid.innerHTML = "";
+    for (const rec of records) {
+      const t = TEMPLATES[rec.tid];
+      const card = document.createElement("div");
+      card.className = "zukan-card";
+      const img = document.createElement("img");
+      img.src = rec.data;
+      img.alt = rec.name || "";
+      const name = document.createElement("div");
+      name.className = "z-name";
+      name.textContent = rec.name || "(なまえなし)";
+      const meta = document.createElement("div");
+      meta.className = "z-meta";
+      const kind = rec.joints ? "🕺 にんげん" : t ? `${t.emoji} ${t.name}` : "え";
+      const when = rec.ts ? new Date(rec.ts).toLocaleDateString("ja-JP") : "";
+      meta.textContent = `${kind} ${when}`;
+      card.append(img, name, meta);
+      if (rec.rare) {
+        const star = document.createElement("div");
+        star.className = "z-rare";
+        star.textContent = "✨";
+        card.append(star);
+      }
+      grid.append(card);
+    }
+  }
 
   /* ================= ワールド ================= */
 
@@ -96,6 +148,20 @@
     return () => selected;
   }
 
+  /* ================= 音 ================= */
+
+  document.addEventListener("pointerdown", () => Sound.resume());
+
+  const soundBtn = $("#btn-sound");
+  function renderSoundBtn() {
+    soundBtn.textContent = Sound.isMuted() ? "🔇" : "🔊";
+  }
+  soundBtn.addEventListener("click", () => {
+    Sound.toggleMute();
+    renderSoundBtn();
+  });
+  renderSoundBtn();
+
   /* ================= キオスクモード (プロジェクター常設用) ================= */
 
   if (new URLSearchParams(location.search).has("kiosk")) {
@@ -109,8 +175,17 @@
     { id: "sea", name: "うみ", emoji: "🌊" },
     { id: "sky", name: "そら", emoji: "☁️" },
     { id: "land", name: "りく", emoji: "🛣️" },
+    { id: "space", name: "うちゅう", emoji: "🌌" },
     { id: "human", name: "にんげんにする", emoji: "🕺" },
   ];
+
+  /* 放流オプション: 名前 + きらきら抽選 + おひろめ演出 */
+  function releaseOpts(nameInputSel) {
+    const input = $(nameInputSel);
+    const name = input.value.trim().slice(0, 10);
+    input.value = "";
+    return { name, rare: Math.random() < 0.125, celebrate: true };
+  }
 
   function buildHabitatChips(containerSel) {
     const row = $(containerSel);
@@ -438,6 +513,7 @@
         opts = { habitat: hb };
       }
     }
+    Object.assign(opts, releaseOpts("#scan-name"));
     World.addCreature(tid, scannedSprite, opts);
     scannedSprite = null;
     $("#scan-step-adjust").classList.add("hidden");
@@ -646,6 +722,7 @@
         opts = { habitat: hb };
       }
     }
+    Object.assign(opts, releaseOpts("#draw-name"));
     World.addCreature(drawTid, spr, opts);
     showView("world");
   });

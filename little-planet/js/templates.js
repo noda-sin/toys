@@ -146,6 +146,147 @@ function carDecor(ctx) {
   ctx.stroke();
 }
 
+function rocketPath() {
+  const p = new Path2D();
+  p.moveTo(770, 200);                               // ノーズ先端 (右向き)
+  p.quadraticCurveTo(715, 95, 555, 85);
+  p.lineTo(255, 85);                                // 胴体上
+  p.lineTo(135, 30);                                // 上フィン
+  p.quadraticCurveTo(90, 120, 88, 200);
+  p.quadraticCurveTo(90, 280, 135, 370);            // 下フィン (ミラー)
+  p.lineTo(255, 315);
+  p.lineTo(555, 315);
+  p.quadraticCurveTo(715, 305, 770, 200);
+  p.closePath();
+  return p;
+}
+
+function rocketDecor(ctx) {
+  // まる窓
+  ctx.beginPath();
+  ctx.arc(430, 200, 58, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(430, 200, 40, 0, Math.PI * 2);
+  ctx.stroke();
+  // ノーズの帯
+  ctx.beginPath();
+  ctx.moveTo(575, 92);
+  ctx.quadraticCurveTo(600, 200, 575, 308);
+  ctx.stroke();
+}
+
+function butterflyPath() {
+  const p = new Path2D();
+  p.moveTo(700, 300);                               // 頭 (右向き)
+  p.quadraticCurveTo(735, 322, 700, 348);
+  p.lineTo(560, 385);                               // 体の下面
+  p.quadraticCurveTo(430, 490, 300, 465);           // 後ろばね下
+  p.quadraticCurveTo(235, 440, 295, 360);
+  p.quadraticCurveTo(380, 340, 465, 330);           // ばねの切れ込み
+  p.quadraticCurveTo(300, 320, 165, 225);           // 前ばね下側
+  p.quadraticCurveTo(85, 165, 130, 90);             // ばね先
+  p.quadraticCurveTo(300, 55, 480, 180);            // 前ばね上側
+  p.quadraticCurveTo(600, 255, 700, 300);
+  p.closePath();
+  return p;
+}
+
+function butterflyDecor(ctx) {
+  // 目
+  ctx.beginPath();
+  ctx.arc(660, 315, 12, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(663, 315, 4, 0, Math.PI * 2);
+  ctx.fill();
+  // 羽のもよう
+  for (const [x, y, r] of [[300, 190, 42], [420, 260, 30], [330, 410, 26]]) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function boatPath() {
+  const p = new Path2D();
+  // 帆
+  p.moveTo(390, 45);
+  p.lineTo(660, 325);
+  p.lineTo(400, 325);
+  p.closePath();
+  // 船体
+  p.moveTo(120, 340);
+  p.lineTo(700, 340);
+  p.lineTo(635, 445);
+  p.lineTo(185, 445);
+  p.closePath();
+  return p;
+}
+
+function boatDecor(ctx) {
+  // マスト
+  ctx.beginPath();
+  ctx.moveTo(392, 50);
+  ctx.lineTo(392, 340);
+  ctx.stroke();
+  // 船体の波線と丸窓
+  ctx.beginPath();
+  ctx.moveTo(180, 395);
+  ctx.quadraticCurveTo(410, 375, 645, 395);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(300, 395, 16, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(410, 392, 16, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(520, 395, 16, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function dinoPath() {
+  const p = new Path2D();
+  p.moveTo(95, 60);                                 // 頭 (左向き)
+  p.quadraticCurveTo(40, 80, 58, 122);
+  p.lineTo(120, 152);                               // あご
+  p.quadraticCurveTo(158, 260, 200, 340);           // 首の前側
+  p.quadraticCurveTo(255, 420, 375, 432);           // 胸→おなか
+  p.lineTo(365, 528);                               // 前あし
+  p.lineTo(430, 528);
+  p.lineTo(440, 438);
+  p.quadraticCurveTo(500, 445, 555, 430);           // おなか
+  p.lineTo(550, 528);                               // 後ろあし
+  p.lineTo(618, 528);
+  p.lineTo(632, 418);
+  p.quadraticCurveTo(720, 400, 785, 328);           // しっぽ下側→先
+  p.quadraticCurveTo(725, 298, 638, 292);           // しっぽ上側
+  p.quadraticCurveTo(480, 250, 330, 248);           // 背中
+  p.quadraticCurveTo(235, 238, 190, 140);           // 首のうしろ
+  p.quadraticCurveTo(160, 68, 95, 60);
+  p.closePath();
+  return p;
+}
+
+function dinoDecor(ctx) {
+  // 目と鼻
+  ctx.beginPath();
+  ctx.arc(105, 95, 12, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(108, 95, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(68, 105, 4, 0, Math.PI * 2);
+  ctx.fill();
+  // おなかの線
+  ctx.beginPath();
+  ctx.moveTo(230, 380);
+  ctx.quadraticCurveTo(420, 470, 620, 400);
+  ctx.stroke();
+}
+
 /* ---------------------------------------------------------
  * にんげん (Aポーズ・正面向き)
  * シルエットは右半身のベジェ列を定義し、左半身はミラー生成する。
@@ -233,7 +374,8 @@ const HUMAN_RIG = {
     { seg: ["hipL", "kneeL"], width: 96,
       chain: [["hipL", "thighL"]] },
     // 体幹 + 頭 (最後 = 最前面。肩・またの切れ目を隠す)
-    { seg: ["hips", "headTop"], width: 215, chain: [] },
+    // body 角度で前かがみ (おじぎ) や横ゆれ (ダンス) ができる
+    { seg: ["hips", "headTop"], width: 215, chain: [["hips", "body"]] },
   ],
 };
 HUMAN_RIG.joints.headTop = [260, 70];
@@ -284,6 +426,30 @@ const TEMPLATES = {
     box: { w: HUMAN_W, h: 800 },
     path: humanPath, decor: humanDecor,
     rig: HUMAN_RIG,
+  },
+  rocket: {
+    id: "rocket", name: "ロケット", emoji: "🚀",
+    habitat: "space", facing: "right",
+    box: { w: 800, h: 400 },
+    path: rocketPath, decor: rocketDecor,
+  },
+  butterfly: {
+    id: "butterfly", name: "ちょうちょ", emoji: "🦋",
+    habitat: "sky", facing: "right",
+    box: { w: 780, h: 520 },
+    path: butterflyPath, decor: butterflyDecor,
+  },
+  boat: {
+    id: "boat", name: "ふね", emoji: "⛵",
+    habitat: "sea", facing: "right", surface: true,
+    box: { w: 800, h: 460 },
+    path: boatPath, decor: boatDecor,
+  },
+  dino: {
+    id: "dino", name: "きょうりゅう", emoji: "🦕",
+    habitat: "land", facing: "left",
+    box: { w: 800, h: 545 },
+    path: dinoPath, decor: dinoDecor,
   },
   /* じゆうモード: 形は決めず、描かれたインクから切り抜く */
   free: {
