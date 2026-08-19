@@ -82,11 +82,56 @@ const World = (() => {
       excited: 0,       // タップしたときの盛り上がり
       spin: 0,
     };
+    // 骨格リグ付きテンプレート (にんげん) はスプライトをパーツに分解する
+    if (t && t.rig) {
+      let spr = sprite;
+      if (sprite.width !== t.box.w || sprite.height !== t.box.h) {
+        // 保存データ等で縮小されている場合はテンプレート座標系に戻す
+        spr = document.createElement("canvas");
+        spr.width = t.box.w;
+        spr.height = t.box.h;
+        spr.getContext("2d").drawImage(sprite, 0, 0, spr.width, spr.height);
+        c.sprite = spr;
+      }
+      c.puppet = makePuppet(spr, t.rig);
+      c.speed *= 0.5;   // 歩きなのでゆっくり
+    }
+
     c.baseY = c.y;
     creatures.push(c);
     burst(c.x * W, c.y * H, "#ffd76e", 18);
     save();
     return c;
+  }
+
+  /* スプライトを関節カプセル (太い丸端線分) でパーツに切り出す */
+  function makePuppet(sprite, rig) {
+    const parts = rig.parts.map(def => {
+      const a = rig.joints[def.seg[0]];
+      const b0 = rig.joints[def.seg[1]];
+      const ext = def.ext || 0;
+      const b = [b0[0] + (b0[0] - a[0]) * ext, b0[1] + (b0[1] - a[1]) * ext];
+      const r = def.width / 2 + 4;
+      const minX = Math.max(0, Math.floor(Math.min(a[0], b[0]) - r));
+      const minY = Math.max(0, Math.floor(Math.min(a[1], b[1]) - r));
+      const maxX = Math.min(sprite.width, Math.ceil(Math.max(a[0], b[0]) + r));
+      const maxY = Math.min(sprite.height, Math.ceil(Math.max(a[1], b[1]) + r));
+      const cv = document.createElement("canvas");
+      cv.width = Math.max(1, maxX - minX);
+      cv.height = Math.max(1, maxY - minY);
+      const pctx = cv.getContext("2d");
+      pctx.drawImage(sprite, -minX, -minY);
+      pctx.globalCompositeOperation = "destination-in";
+      pctx.strokeStyle = "#000";
+      pctx.lineWidth = def.width;
+      pctx.lineCap = "round";
+      pctx.beginPath();
+      pctx.moveTo(a[0] - minX, a[1] - minY);
+      pctx.lineTo(b[0] - minX, b[1] - minY);
+      pctx.stroke();
+      return { canvas: cv, ox: minX, oy: minY, chain: def.chain };
+    });
+    return { parts, joints: rig.joints };
   }
 
   function zoneFor(habitat) {
@@ -361,7 +406,8 @@ const World = (() => {
     ctx.save();
 
     if (c.habitat === "land") {
-      drawDrive(c, cx);
+      if (c.puppet) drawPuppet(c, cx);
+      else drawDrive(c, cx);
       ctx.restore();
       return;
     }
@@ -450,6 +496,66 @@ const World = (() => {
       x0, y0 + split * c.scale - wingH,
       w, wingH
     );
+  }
+
+  /* 骨格リグ付きスプライト (にんげん) のカットアウトアニメ。
+   * ふだんは歩行サイクル、タップされる (excited) とダンスにブレンドする */
+  function drawPuppet(c, cx) {
+    const box = c.sprite;
+    const roadY = H * ((LAYOUT.roadTop + LAYOUT.roadBottom) / 2) + 6;
+    const d = Math.min(1, c.excited * 1.4);   // 0=歩き 1=ダンス
+    const wp = time * 6.5 + c.phase;          // 歩行の位相
+    const dp = time * 9 + c.phase;            // ダンスの位相
+
+    const walk = {
+      thighR: Math.sin(wp) * 0.5,
+      thighL: Math.sin(wp + Math.PI) * 0.5,
+      shinR: 0.08 + Math.max(0, Math.sin(wp - 1.4)) * 0.7,
+      shinL: 0.08 + Math.max(0, Math.sin(wp + Math.PI - 1.4)) * 0.7,
+      // 腕は体側に下ろした姿勢を基準に前後へ振る
+      armR: 0.55 + Math.sin(wp + Math.PI) * 0.3,
+      armL: -0.55 + Math.sin(wp) * 0.3,
+      foreR: -0.35, foreL: 0.35,
+      lean: 0.05,
+      hop: Math.abs(Math.sin(wp)) * 14,
+    };
+    const dance = {
+      thighR: Math.sin(dp) * 0.15,
+      thighL: -Math.sin(dp) * 0.15,
+      shinR: 0.15, shinL: 0.15,
+      armR: -1.95 + Math.sin(dp) * 0.4,          // ばんざいして振る
+      armL: 1.95 - Math.sin(dp + 0.6) * 0.4,
+      foreR: -0.3 + Math.sin(dp + 1) * 0.4,
+      foreL: 0.3 - Math.sin(dp + 1.6) * 0.4,
+      lean: Math.sin(dp * 0.5) * 0.14,
+      hop: Math.abs(Math.sin(dp)) * 40,
+    };
+    const mix = k => walk[k] * (1 - d) + dance[k] * d;
+    const angles = {
+      thighR: mix("thighR"), thighL: mix("thighL"),
+      shinR: mix("shinR"), shinL: mix("shinL"),
+      armR: mix("armR"), armL: mix("armL"),
+      foreR: mix("foreR"), foreL: mix("foreL"),
+    };
+
+    ctx.translate(cx, roadY);
+    const facingSign = c.facing === "left" ? -1 : 1;
+    if (c.dir !== facingSign) ctx.scale(-1, 1);
+    ctx.rotate(mix("lean"));
+    ctx.scale(c.scale, c.scale);
+    ctx.translate(-box.width / 2, -box.height - mix("hop"));
+
+    for (const part of c.puppet.parts) {
+      ctx.save();
+      for (const [jointName, angleKey] of part.chain) {
+        const j = c.puppet.joints[jointName];
+        ctx.translate(j[0], j[1]);
+        ctx.rotate(angles[angleKey]);
+        ctx.translate(-j[0], -j[1]);
+      }
+      ctx.drawImage(part.canvas, part.ox, part.oy);
+      ctx.restore();
+    }
   }
 
   /* 道路の上をホップしながら走る。接地でつぶれ、空中で伸びる

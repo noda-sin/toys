@@ -146,6 +146,98 @@ function carDecor(ctx) {
   ctx.stroke();
 }
 
+/* ---------------------------------------------------------
+ * にんげん (Aポーズ・正面向き)
+ * シルエットは右半身のベジェ列を定義し、左半身はミラー生成する。
+ * テンプレートなので関節位置が既知 = ML なしで骨格リグが組める
+ * --------------------------------------------------------- */
+
+const HUMAN_W = 520;
+
+/* (260,30) 頭頂から時計回りに右半身 → 下中央 (260,516) までのベジェ列
+ * [c1x,c1y, c2x,c2y, x,y] */
+const HUMAN_RIGHT_SEGS = [
+  [310, 30, 345, 60, 345, 115],     // 頭の右側
+  [345, 160, 320, 180, 300, 190],   // あご〜首
+  [325, 200, 350, 205, 362, 225],   // 肩
+  [400, 260, 455, 350, 472, 410],   // 腕の外側
+  [478, 440, 455, 462, 430, 452],   // 手の丸み
+  [390, 398, 330, 310, 305, 285],   // 腕の内側 (わきへ)
+  [310, 330, 320, 420, 330, 480],   // 胴の横
+  [338, 520, 338, 620, 338, 720],   // 脚の外側
+  [338, 762, 300, 772, 272, 762],   // 足
+  [258, 700, 258, 600, 262, 540],   // 脚の内側
+  [262, 528, 261, 520, 260, 516],   // またぐら
+];
+
+function humanPath() {
+  const p = new Path2D();
+  p.moveTo(260, 30);
+  for (const [c1x, c1y, c2x, c2y, x, y] of HUMAN_RIGHT_SEGS) {
+    p.bezierCurveTo(c1x, c1y, c2x, c2y, x, y);
+  }
+  // 左半身: 逆順にミラー (x → HUMAN_W - x)
+  for (let i = HUMAN_RIGHT_SEGS.length - 1; i >= 0; i--) {
+    const [c1x, c1y, c2x, c2y] = HUMAN_RIGHT_SEGS[i];
+    const start = i > 0 ? HUMAN_RIGHT_SEGS[i - 1] : null;
+    const sx = start ? start[4] : 260;
+    const sy = start ? start[5] : 30;
+    p.bezierCurveTo(HUMAN_W - c2x, c2y, HUMAN_W - c1x, c1y, HUMAN_W - sx, sy);
+  }
+  p.closePath();
+  return p;
+}
+
+function humanDecor(ctx) {
+  // 目
+  for (const ex of [232, 288]) {
+    ctx.beginPath();
+    ctx.arc(ex, 100, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(ex, 100, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 口
+  ctx.beginPath();
+  ctx.arc(260, 125, 22, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.stroke();
+}
+
+/* 関節座標とパーツ分割 (テンプレート座標系)。
+ * parts は奥→手前の描画順。seg のカプセル (太い丸端線分) でスプライトを
+ * 切り出し、chain の [関節, 角度キー] を順に適用して回転させる */
+const HUMAN_RIG = {
+  joints: {
+    hips: [260, 480],
+    shoulderR: [330, 235], elbowR: [400, 330], wristR: [452, 420],
+    shoulderL: [190, 235], elbowL: [120, 330], wristL: [68, 420],
+    hipR: [298, 495], kneeR: [320, 612], ankleR: [330, 730],
+    hipL: [222, 495], kneeL: [200, 612], ankleL: [190, 730],
+  },
+  parts: [
+    { seg: ["elbowR", "wristR"], width: 84, ext: 0.42,
+      chain: [["shoulderR", "armR"], ["elbowR", "foreR"]] },
+    { seg: ["shoulderR", "elbowR"], width: 88,
+      chain: [["shoulderR", "armR"]] },
+    { seg: ["elbowL", "wristL"], width: 84, ext: 0.42,
+      chain: [["shoulderL", "armL"], ["elbowL", "foreL"]] },
+    { seg: ["shoulderL", "elbowL"], width: 88,
+      chain: [["shoulderL", "armL"]] },
+    { seg: ["kneeR", "ankleR"], width: 92, ext: 0.5,
+      chain: [["hipR", "thighR"], ["kneeR", "shinR"]] },
+    { seg: ["hipR", "kneeR"], width: 96,
+      chain: [["hipR", "thighR"]] },
+    { seg: ["kneeL", "ankleL"], width: 92, ext: 0.5,
+      chain: [["hipL", "thighL"], ["kneeL", "shinL"]] },
+    { seg: ["hipL", "kneeL"], width: 96,
+      chain: [["hipL", "thighL"]] },
+    // 体幹 + 頭 (最後 = 最前面。肩・またの切れ目を隠す)
+    { seg: ["hips", "headTop"], width: 215, chain: [] },
+  ],
+};
+HUMAN_RIG.joints.headTop = [260, 70];
+
 const TEMPLATES = {
   fish: {
     id: "fish", name: "さかな", emoji: "🐟",
@@ -164,6 +256,13 @@ const TEMPLATES = {
     habitat: "land", facing: "left",
     box: { w: 800, h: 420 },
     path: carPath, decor: carDecor,
+  },
+  human: {
+    id: "human", name: "にんげん", emoji: "🧍",
+    habitat: "land", facing: "left",
+    box: { w: HUMAN_W, h: 800 },
+    path: humanPath, decor: humanDecor,
+    rig: HUMAN_RIG,
   },
   /* じゆうモード: 形は決めず、描かれたインクから切り抜く */
   free: {
